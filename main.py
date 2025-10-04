@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from app.core.config import settings
 from app.core.logging import setup_logging
-from app.api.routes import probability, dashboard, map_endpoints, custom_query
+from app.api.routes import probability, dashboard, map_endpoints, custom_query, historical
 import logging
 
 # Initialize logging
@@ -67,6 +67,7 @@ app.include_router(probability.router, prefix="/api", tags=["Map Probability"])
 app.include_router(dashboard.router, prefix="/api", tags=["Dashboard"])
 app.include_router(map_endpoints.router, prefix="/api", tags=["Map Analysis"])
 app.include_router(custom_query.router, prefix="/api", tags=["Custom Query"])
+app.include_router(historical.router, prefix="/api", tags=["Historical"])
 
 # Global exception handler
 @app.exception_handler(Exception)

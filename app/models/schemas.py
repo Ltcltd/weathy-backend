@@ -250,3 +250,47 @@ class CustomQueryResponse(BaseModel):
     spatial_results: List[Dict[str, Any]]
     temporal_trends: List[Dict[str, Any]]
     export_links: Dict[str, str]
+
+# Historical & Trends Models - EXACT from docs
+class HistoricalDataPoint(BaseModel):
+    """Single historical data point"""
+    year: int
+    date: str
+    value: float
+    observed: bool = True
+
+class TrendInfo(BaseModel):
+    """Trend analysis"""
+    direction: Literal["increasing", "decreasing", "stable"]
+    rate: float
+    significance: float
+    confidence: Literal["low", "medium", "high"]
+
+class Climatology(BaseModel):
+    """Climatology information"""
+    long_term_mean: float
+    trend: TrendInfo
+
+class Percentiles(BaseModel):
+    """Statistical percentiles"""
+    p10: float
+    p25: float
+    p50: float
+    p75: float
+    p90: float
+
+class SimilarYear(BaseModel):
+    """Similar historical year"""
+    year: int
+    similarity: float
+    value: float
+
+class HistoricalResponse(BaseModel):
+    """Historical patterns response - EXACT from docs"""
+    location: Location
+    variable: str
+    period: str
+    climatology: Climatology
+    historical_data: List[HistoricalDataPoint]
+    percentiles: Percentiles
+    similar_years: List[SimilarYear]
