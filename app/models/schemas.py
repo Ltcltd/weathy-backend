@@ -2,7 +2,7 @@ from pydantic import BaseModel, Field
 from typing import Optional, List, Dict
 from datetime import date
 from pydantic import BaseModel, Field
-from typing import Optional, List, Dict, Literal
+from typing import Optional, List, Dict, Literal, Any
 from datetime import date
 
 # Core response models
@@ -124,5 +124,73 @@ class DashboardResponse(BaseModel):
                     "best_time_window": "10:00-15:00",
                     "equipment_suggestions": ["umbrellas", "tent"]
                 }
+            }
+        }
+
+# Area Analysis Models
+class AreaAnalysisRequest(BaseModel):
+    """Request for analyzing weather over a polygon area"""
+    area: Dict[str, Any] = Field(..., description="GeoJSON polygon")
+    date: str = Field(..., description="Target date YYYY-MM-DD")
+    variables: List[str] = Field(..., description="Weather variables to analyze")
+    resolution: Literal["low", "medium", "high"] = Field("medium", description="Grid resolution")
+    aggregation: Literal["mean", "median", "max", "min"] = Field("mean", description="Aggregation method")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "area": {
+                    "type": "polygon",
+                    "coordinates": [[[40.0, -75.0], [41.0, -75.0], [41.0, -73.0], [40.0, -73.0], [40.0, -75.0]]]
+                },
+                "date": "2026-06-15",
+                "variables": ["rain", "heat_wave", "wind_speed_high"],
+                "resolution": "high",
+                "aggregation": "mean"
+            }
+        }
+
+class SpatialAnalysis(BaseModel):
+    """Statistical analysis of spatial data"""
+    mean: float = Field(..., description="Mean value")
+    min: float = Field(..., description="Minimum value")
+    max: float = Field(..., description="Maximum value")
+    std: float = Field(..., description="Standard deviation")
+    hotspots: List[Dict[str, Any]] = Field(default_factory=list, description="High probability areas")
+
+class RiskZone(BaseModel):
+    """Risk zone definition"""
+    level: Literal["low", "medium", "high"] = Field(..., description="Risk level")
+    area_percent: float = Field(..., description="Percentage of total area")
+    coordinates: List[List[List[float]]] = Field(..., description="Zone boundary coordinates")
+
+class AreaAnalysisResponse(BaseModel):
+    """Response for area analysis"""
+    area_summary: Dict[str, Any] = Field(..., description="Area metadata")
+    spatial_analysis: Dict[str, SpatialAnalysis] = Field(..., description="Analysis per variable")
+    risk_zones: List[RiskZone] = Field(..., description="Risk zone classifications")
+    grid_data: List[Dict[str, Any]] = Field(..., description="Grid point data")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "area_summary": {
+                    "center": {"lat": 40.5, "lon": -74.2},
+                    "area_km2": 1250.3,
+                    "grid_points": 128
+                },
+                "spatial_analysis": {
+                    "rain": {
+                        "mean": 0.42,
+                        "min": 0.28,
+                        "max": 0.61,
+                        "std": 0.08,
+                        "hotspots": [{"lat": 40.8, "lon": -74.1, "value": 0.61}]
+                    }
+                },
+                "risk_zones": [
+                    {"level": "high", "area_percent": 15, "coordinates": []}
+                ],
+                "grid_data": []
             }
         }
