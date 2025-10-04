@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from app.core.config import settings
 from app.core.logging import setup_logging
+from app.api.routes import probability  # NEW IMPORT
 import logging
 
 # Initialize logging
@@ -21,7 +22,7 @@ app = FastAPI(
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure for production
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -30,7 +31,6 @@ app.add_middleware(
 # Startup event
 @app.on_event("startup")
 async def startup_event():
-    """Initialize on startup"""
     logger.info("Starting Weather Probability API...")
     logger.info(f"Model path: {settings.MODEL_BASE_PATH}")
     logger.info(f"Data path: {settings.DATA_BASE_PATH}")
@@ -38,13 +38,11 @@ async def startup_event():
 # Shutdown event
 @app.on_event("shutdown")
 async def shutdown_event():
-    """Cleanup on shutdown"""
     logger.info("Shutting down Weather Probability API...")
 
 # Health check endpoint
 @app.get("/health")
 async def health_check():
-    """Health check endpoint"""
     return {
         "status": "healthy",
         "service": "weather-probability-api",
@@ -54,12 +52,18 @@ async def health_check():
 # Root endpoint
 @app.get("/")
 async def root():
-    """Root endpoint with API information"""
     return {
         "message": "Weather Probability API",
         "docs": "/docs",
-        "health": "/health"
+        "health": "/health",
+        "endpoints": {
+            "probability": "/api/probability/{lat}/{lon}/{date}",
+            "docs": "/docs"
+        }
     }
+
+# Include routers
+app.include_router(probability.router, prefix="/api", tags=["Map Probability"])
 
 # Global exception handler
 @app.exception_handler(Exception)
