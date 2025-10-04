@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from app.core.config import settings
 from app.core.logging import setup_logging
-from app.api.routes import probability, dashboard, map_endpoints, custom_query, historical, map_layers, chatbot
+from app.api.routes import probability, dashboard, map_endpoints, custom_query, historical, map_layers, chatbot, utility
 import logging
 
 # Initialize logging
@@ -70,6 +70,7 @@ app.include_router(custom_query.router, prefix="/api", tags=["Custom Query"])
 app.include_router(historical.router, prefix="/api", tags=["Historical"])
 app.include_router(map_layers.router, prefix="/api", tags=["Map Layers"])
 app.include_router(chatbot.router, prefix="/api", tags=["AI Chatbot"])
+app.include_router(utility.router, prefix="/api", tags=["Utility"])
 
 # Global exception handler
 @app.exception_handler(Exception)
