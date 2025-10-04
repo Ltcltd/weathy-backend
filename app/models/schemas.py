@@ -194,3 +194,45 @@ class AreaAnalysisResponse(BaseModel):
                 "grid_data": []
             }
         }
+
+class TemporalFilter(BaseModel):
+    """Temporal filtering for custom queries"""
+    start_date: str = Field(..., description="Start date YYYY-MM-DD")
+    end_date: str = Field(..., description="End date YYYY-MM-DD")
+    interval: Literal["daily", "weekly", "monthly"] = Field("daily", description="Time interval")
+
+class SpatialFilter(BaseModel):
+    """Spatial filtering options"""
+    type: Literal["point", "area", "multi_point"] = Field(..., description="Spatial query type")
+    locations: List[Dict[str, float]] = Field(..., description="List of {lat, lon} points")
+    area: Optional[Dict[str, Any]] = Field(None, description="Polygon area (if type=area)")
+
+class VariableFilter(BaseModel):
+    """Variable filtering with thresholds"""
+    variable: str = Field(..., description="Weather variable")
+    operator: Literal["gt", "lt", "gte", "lte", "eq", "between"] = Field(..., description="Comparison operator")
+    threshold: float = Field(..., description="Threshold value")
+    threshold_max: Optional[float] = Field(None, description="Max threshold for 'between'")
+
+class CustomQueryRequest(BaseModel):
+    """Custom query builder request"""
+    temporal: TemporalFilter
+    spatial: SpatialFilter
+    variables: List[str] = Field(..., min_items=1, description="Weather variables to analyze")
+    filters: Optional[List[VariableFilter]] = Field(None, description="Optional filters")
+    aggregation: Literal["mean", "median", "max", "min", "count"] = Field("mean", description="Aggregation method")
+
+class QueryResultPoint(BaseModel):
+    """Single result point in query"""
+    location: Location
+    date: str
+    values: Dict[str, float]
+    meets_criteria: bool = Field(..., description="Whether point meets all filters")
+
+class CustomQueryResponse(BaseModel):
+    """Custom query results"""
+    query_summary: Dict[str, Any]
+    results: List[QueryResultPoint]
+    statistics: Dict[str, Dict[str, float]]
+    matching_count: int = Field(..., description="Number of results meeting criteria")
+    total_count: int = Field(..., description="Total results analyzed")
