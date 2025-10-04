@@ -1,14 +1,12 @@
 #handles database connection
 
-import motor.motor_asyncio
+import os
+import motor.motor_asyncio 
 
-MONGO_URI = "mongodb://localhost:27017"
+MONGO_URI = os.getenv("DATABASE_URL", "mongodb://localhost:27017")
 
+client = motor.motor_asyncio.AsyncIOMotorClient(MONGO_URI)
+db = client["weathyDB"] 
 
-def main():
-    client = motor.motor_asyncio.AsyncIOMotorClient(MONGO_URI)  #connnect to local db instance
-
-    db = client["weathy"]
-    collection = db["trends"]
-
-main()
+def get_database():
+    return db 
