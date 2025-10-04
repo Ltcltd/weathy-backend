@@ -16,3 +16,8 @@ requests>=2.31.0
 tqdm>=4.66.0
 timm>=0.9.12
 einops>=0.7.0
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+pydantic-settings==2.1.0
+python-multipart==0.0.6
