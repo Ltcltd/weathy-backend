@@ -1,0 +1,28 @@
+{
+  "model_type": "pretrained_finetuned",
+  "base_model": "microsoft/swin-tiny-patch4-window7-224",
+  "base_model_name": "Swin Transformer",
+  "hidden_dim": 768,
+  "input_dim": 7,
+  "output_dim": 5,
+  "normalization_mean": [
+    0.0327,
+    0.192,
+    183.30339,
+    6.5267,
+    9.095489,
+    5.1169083,
+    80.33766670000001
+  ],
+  "normalization_std": [
+    47.380427727676846,
+    103.49016928225502,
+    105.45916928658733,
+    3.4487486395756615,
+    19.135853594015504,
+    2.9833876285288277,
+    16.424183623401035
+  ],
+  "best_val_loss": 0.1913679717462274,
+  "trainable_params": 758789
+}
