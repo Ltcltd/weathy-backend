@@ -1,255 +1,161 @@
 from fastapi import APIRouter, Depends, HTTPException, Body
-from app.models.schemas import (
-    CustomQueryRequest, CustomQueryResponse, QueryResultPoint,
-    Location, VariableFilter
-)
+from app.models.schemas import CustomQueryRequest, CustomQueryResponse
 from app.api.dependencies import get_ensemble
 from app.models.ai.ensemble import WeatherEnsemble
 from datetime import datetime, timedelta
-from typing import List, Dict, Any
+import time
+import uuid
 import logging
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-def parse_dates(start_date: str, end_date: str, interval: str) -> List[str]:
-    """
-    Generate list of dates based on interval.
-    
-    Args:
-        start_date: Start date string
-        end_date: End date string
-        interval: Interval type
-        
-    Returns:
-        List of date strings
-    """
-    start = datetime.strptime(start_date, "%Y-%m-%d")
-    end = datetime.strptime(end_date, "%Y-%m-%d")
-    
-    dates = []
-    current = start
-    
-    if interval == "daily":
-        delta = timedelta(days=1)
-    elif interval == "weekly":
-        delta = timedelta(weeks=1)
-    else:  # monthly
-        delta = timedelta(days=30)
-    
-    while current <= end:
-        dates.append(current.strftime("%Y-%m-%d"))
-        current += delta
-    
-    # Limit to prevent excessive computation
-    return dates[:100]
-
-
-def evaluate_filter(value: float, filter_obj: VariableFilter) -> bool:
-    """
-    Evaluate if value meets filter criteria.
-    
-    Args:
-        value: Value to check
-        filter_obj: Filter specification
-        
-    Returns:
-        True if value meets criteria
-    """
-    operator = filter_obj.operator
-    threshold = filter_obj.threshold
-    
-    if operator == "gt":
-        return value > threshold
-    elif operator == "lt":
-        return value < threshold
-    elif operator == "gte":
-        return value >= threshold
-    elif operator == "lte":
-        return value <= threshold
-    elif operator == "eq":
-        return abs(value - threshold) < 0.01
-    elif operator == "between":
-        if filter_obj.threshold_max is None:
-            return False
-        return threshold <= value <= filter_obj.threshold_max
-    return False
-
-
-def calculate_statistics(results: List[QueryResultPoint], variables: List[str]) -> Dict[str, Dict[str, float]]:
-    """
-    Calculate statistics across results.
-    
-    Args:
-        results: Query results
-        variables: Variables to analyze
-        
-    Returns:
-        Statistics dictionary
-    """
-    import numpy as np
-    
-    stats = {}
-    
-    for variable in variables:
-        values = [r.values.get(variable, 0.0) for r in results if variable in r.values]
-        
-        if values:
-            stats[variable] = {
-                "mean": float(np.mean(values)),
-                "min": float(np.min(values)),
-                "max": float(np.max(values)),
-                "std": float(np.std(values)),
-                "median": float(np.median(values))
-            }
-        else:
-            stats[variable] = {"mean": 0.0, "min": 0.0, "max": 0.0, "std": 0.0, "median": 0.0}
-    
-    return stats
-
-
 @router.post(
-    "/query/custom",
+    "/custom-query",
     response_model=CustomQueryResponse,
     summary="Custom Query Builder",
-    description="Execute complex multi-variable queries with temporal and spatial filters"
+    description="Multi-variable, spatial, temporal queries"
 )
 async def execute_custom_query(
     request: CustomQueryRequest = Body(...),
     ensemble: WeatherEnsemble = Depends(get_ensemble)
 ):
-    """
-    Execute a custom query with multiple dimensions.
+    """Execute custom query - returns ALL evaluated points."""
+    start_time = time.time()
+    query_id = f"q_{uuid.uuid4().hex[:8]}"
     
-    **Query Capabilities:**
-    - **Temporal filtering**: Date ranges with daily/weekly/monthly intervals
-    - **Spatial filtering**: Single point, multiple points, or area
-    - **Variable selection**: Any combination of weather variables
-    - **Threshold filters**: Filter results by probability thresholds
-    - **Aggregation**: mean, median, max, min, count
-    
-    **Example Use Cases:**
-    - "Find all dates in June 2026 where rain probability > 60% in New York"
-    - "Compare probabilities across 5 cities for heat wave conditions"
-    - "Identify days with high wind AND low rain probability"
-    
-    **Perfect for:**
-    - Advanced event planning
-    - Risk assessment
-    - Comparative analysis
-    - Seasonal planning
-    """
     try:
-        # Validate dates
-        try:
-            start_obj = datetime.strptime(request.temporal.start_date, "%Y-%m-%d")
-            end_obj = datetime.strptime(request.temporal.end_date, "%Y-%m-%d")
-        except ValueError:
-            raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
-        
-        if start_obj >= end_obj:
-            raise HTTPException(status_code=400, detail="Start date must be before end date")
-        
-        if start_obj < datetime.now():
-            raise HTTPException(status_code=400, detail="Start date must be in the future")
+        # Parse dates
+        start_date = datetime.strptime(request.temporal.start_date, "%Y-%m-%d")
+        end_date = datetime.strptime(request.temporal.end_date, "%Y-%m-%d")
         
         # Generate date list
-        dates = parse_dates(
-            request.temporal.start_date,
-            request.temporal.end_date,
-            request.temporal.interval
-        )
+        dates = []
+        current = start_date
+        delta = timedelta(days=1 if request.temporal.granularity == "daily" else 30)
         
-        logger.info(f"Executing custom query: {len(dates)} dates, {len(request.spatial.locations)} locations")
+        while current <= end_date and len(dates) < 100:
+            dates.append(current.strftime("%Y-%m-%d"))
+            current += delta
         
-        # Get locations based on spatial filter type
-        if request.spatial.type == "point":
-            locations = [request.spatial.locations[0]] if request.spatial.locations else []
-        elif request.spatial.type == "multi_point":
-            locations = request.spatial.locations
-        else:  # area
-            # For area, sample center point for simplicity
-            # In production, would do grid sampling
-            if request.spatial.area:
-                locations = [{"lat": 40.5, "lon": -74.0}]  # Placeholder
-            else:
-                raise HTTPException(status_code=400, detail="Area must be specified for type=area")
-        
-        if not locations:
-            raise HTTPException(status_code=400, detail="No locations specified")
+        # Extract location
+        if request.location.type == "point":
+            coords = request.location.coordinates
+            locations = [{"lat": coords["lat"], "lon": coords["lon"]}]
+        else:
+            locations = [{"lat": 40.5, "lon": -74.0}]
         
         # Execute query
-        results = []
+        spatial_results = []
+        matching_count = 0
+        total_count = 0
         
         for loc in locations:
-            lat = loc["lat"]
-            lon = loc["lon"]
-            
             for date_str in dates:
-                values = {}
+                total_count += 1
+                condition_values = {}
                 
-                # Get predictions for all variables
-                for variable in request.variables:
+                # Get predictions for all conditions
+                for condition in request.conditions:
                     try:
-                        result = ensemble.predict(lat, lon, date_str, variable)
-                        values[variable] = result["probability"]
-                    except Exception as e:
-                        logger.error(f"Error predicting {variable} at {lat},{lon} on {date_str}: {e}")
-                        values[variable] = 0.0
+                        result = ensemble.predict(
+                            loc["lat"], loc["lon"], 
+                            date_str, condition.variable
+                        )
+                        condition_values[condition.variable] = result["probability"]
+                    except:
+                        condition_values[condition.variable] = 0.0
                 
-                # Evaluate filters
+                # Evaluate conditions
                 meets_criteria = True
-                if request.filters:
-                    for filter_obj in request.filters:
-                        if filter_obj.variable in values:
-                            if not evaluate_filter(values[filter_obj.variable], filter_obj):
-                                meets_criteria = False
-                                break
+                if request.logic == "AND":
+                    for condition in request.conditions:
+                        val = condition_values.get(condition.variable, 0.0)
+                        if condition.operator == ">" and not (val > condition.threshold):
+                            meets_criteria = False
+                        elif condition.operator == "<" and not (val < condition.threshold):
+                            meets_criteria = False
+                else:  # OR
+                    meets_criteria = False
+                    for condition in request.conditions:
+                        val = condition_values.get(condition.variable, 0.0)
+                        if condition.operator == ">" and val > condition.threshold:
+                            meets_criteria = True
+                        elif condition.operator == "<" and val < condition.threshold:
+                            meets_criteria = True
                 
-                # Add result
-                result_point = QueryResultPoint(
-                    location=Location(lat=lat, lon=lon, address=f"({lat:.2f}, {lon:.2f})"),
-                    date=date_str,
-                    values=values,
-                    meets_criteria=meets_criteria
+                # Count matches
+                if meets_criteria:
+                    matching_count += 1
+                
+                # Calculate combined probability
+                weighted_sum = sum(
+                    condition_values.get(c.variable, 0.0) * c.weight 
+                    for c in request.conditions
                 )
-                results.append(result_point)
+                total_weight = sum(c.weight for c in request.conditions)
+                combined = weighted_sum / total_weight if total_weight > 0 else 0.0
+                
+                # ADD ALL RESULTS with meets_criteria flag
+                spatial_results.append({
+                    "lat": loc["lat"],
+                    "lon": loc["lon"],
+                    "date": date_str,
+                    "combined_probability": round(combined, 3),
+                    "individual_conditions": {
+                        k: round(v, 3) 
+                        for k, v in condition_values.items()
+                    },
+                    "meets_criteria": meets_criteria
+                })
         
-        # Calculate statistics
-        stats = calculate_statistics(results, request.variables)
+        # Generate temporal trends - COUNT ONLY MATCHES, use "match" field per docs
+        temporal_trends = []
+        month_counts = {}
+        for result in spatial_results:
+            if result.get("meets_criteria", False):
+                month = result["date"][:7]
+                month_counts[month] = month_counts.get(month, 0) + 1
         
-        # Count matching results
-        matching_count = sum(1 for r in results if r.meets_criteria)
+        for month in sorted(month_counts.keys()):
+            temporal_trends.append({
+                "month": month,
+                "match": month_counts[month]  # Changed from "match_count" to "match"
+            })
+        
+        # Build query summary
+        condition_strs = [
+            f"{c.variable} {c.operator} {c.threshold}" 
+            for c in request.conditions
+        ]
+        logic_str = f" {request.logic} ".join(condition_strs)
+        summary = f"Find locations where {logic_str} between {request.temporal.start_date} and {request.temporal.end_date}"
+        
+        execution_time = time.time() - start_time
+        match_pct = (matching_count / total_count * 100) if total_count > 0 else 0.0
         
         # Build response
         response = CustomQueryResponse(
-            query_summary={
-                "temporal": {
-                    "start": request.temporal.start_date,
-                    "end": request.temporal.end_date,
-                    "interval": request.temporal.interval,
-                    "date_count": len(dates)
-                },
-                "spatial": {
-                    "type": request.spatial.type,
-                    "location_count": len(locations)
-                },
-                "variables": request.variables,
-                "filters": len(request.filters) if request.filters else 0,
-                "aggregation": request.aggregation
+            query_id=query_id,
+            query_summary=summary,
+            execution_time=round(execution_time, 2),
+            results={
+                "matching_locations": matching_count,
+                "total_evaluated": total_count,
+                "match_percentage": round(match_pct, 2)
             },
-            results=results,
-            statistics=stats,
-            matching_count=matching_count,
-            total_count=len(results)
+            spatial_results=spatial_results[:50],
+            temporal_trends=temporal_trends,
+            export_links={
+                "csv": f"/api/export/csv?query_id={query_id}",
+                "geojson": f"/api/export/geojson?query_id={query_id}"
+            }
         )
         
-        logger.info(f"Query complete: {matching_count}/{len(results)} results match criteria")
+        logger.info(f"Query {query_id}: {matching_count}/{total_count} matches")
         return response
         
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"Error in custom query: {e}", exc_info=True)
+        logger.error(f"Query error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))

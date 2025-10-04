@@ -2,7 +2,7 @@ from pydantic import BaseModel, Field
 from typing import Optional, List, Dict
 from datetime import date
 from pydantic import BaseModel, Field
-from typing import Optional, List, Dict, Literal, Any
+from typing import Optional, List, Dict, Literal, Any, Union
 from datetime import date
 
 # Core response models
@@ -214,25 +214,39 @@ class VariableFilter(BaseModel):
     threshold: float = Field(..., description="Threshold value")
     threshold_max: Optional[float] = Field(None, description="Max threshold for 'between'")
 
-class CustomQueryRequest(BaseModel):
-    """Custom query builder request"""
-    temporal: TemporalFilter
-    spatial: SpatialFilter
-    variables: List[str] = Field(..., min_items=1, description="Weather variables to analyze")
-    filters: Optional[List[VariableFilter]] = Field(None, description="Optional filters")
-    aggregation: Literal["mean", "median", "max", "min", "count"] = Field("mean", description="Aggregation method")
+class CustomQueryLocation(BaseModel):
+    """Location for custom query"""
+    type: Literal["point", "polygon", "bbox"]
+    coordinates: Union[Dict[str, float], List[List[List[float]]]]
 
-class QueryResultPoint(BaseModel):
-    """Single result point in query"""
-    location: Location
-    date: str
-    values: Dict[str, float]
-    meets_criteria: bool = Field(..., description="Whether point meets all filters")
+class CustomQueryTemporal(BaseModel):
+    """Temporal parameters"""
+    start_date: str
+    end_date: str
+    granularity: Literal["daily", "weekly", "monthly"]
+
+class CustomQueryCondition(BaseModel):
+    """Query condition"""
+    variable: str
+    operator: str
+    threshold: float
+    weight: float = 1.0
+
+class CustomQueryRequest(BaseModel):
+    """Custom query request - EXACT from docs"""
+    location: CustomQueryLocation
+    temporal: CustomQueryTemporal
+    conditions: List[CustomQueryCondition]
+    logic: Literal["AND", "OR"] = "AND"
+    probability_threshold: float = 0.5
+    output_format: Literal["summary", "detailed", "grid"] = "summary"
 
 class CustomQueryResponse(BaseModel):
-    """Custom query results"""
-    query_summary: Dict[str, Any]
-    results: List[QueryResultPoint]
-    statistics: Dict[str, Dict[str, float]]
-    matching_count: int = Field(..., description="Number of results meeting criteria")
-    total_count: int = Field(..., description="Total results analyzed")
+    """Custom query response - EXACT from docs"""
+    query_id: str
+    query_summary: str
+    execution_time: float
+    results: Dict[str, Any]
+    spatial_results: List[Dict[str, Any]]
+    temporal_trends: List[Dict[str, Any]]
+    export_links: Dict[str, str]
