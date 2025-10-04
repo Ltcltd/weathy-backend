@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from app.core.config import settings
 from app.core.logging import setup_logging
-from app.api.routes import probability  # NEW IMPORT
+from app.api.routes import probability, dashboard
 import logging
 
 # Initialize logging
@@ -64,6 +64,7 @@ async def root():
 
 # Include routers
 app.include_router(probability.router, prefix="/api", tags=["Map Probability"])
+app.include_router(dashboard.router, prefix="/api", tags=["Dashboard"])
 
 # Global exception handler
 @app.exception_handler(Exception)

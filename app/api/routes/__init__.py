@@ -1,4 +1,4 @@
 """API Routes Package"""
-from . import probability
+from . import probability, dashboard
 
-__all__ = ["probability"]
+__all__ = ["probability", "dashboard"]
