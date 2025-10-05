@@ -91,7 +91,7 @@ class FoundationModel:
             model_path = Path('models/foundation/foundation_model.pth')
             if not model_path.exists():
                 model_path = Path('models/foundation/simplified_foundation.pth')
-            self.model.load_state_dict(torch.load(model_path, weights_only=True))
+            self.model.load_state_dict(torch.load(model_path, weights_only=True, map_location='cpu'))
             self.model.eval()
             self.mode = 'simplified'
         else:
@@ -100,14 +100,18 @@ class FoundationModel:
                 input_dim=7,
                 output_dim=self.config['hidden_dim']
             )
-            self.feature_encoder.load_state_dict(torch.load('models/foundation/feature_encoder.pth', weights_only=True))
+            self.feature_encoder.load_state_dict(
+                torch.load('models/foundation/feature_encoder.pth', 
+                        weights_only=True, 
+                        map_location='cpu')
+            )
             self.feature_encoder.eval()
             
             self.prediction_head = WeatherPredictionHead(
                 input_dim=self.config['hidden_dim'],
                 num_outputs=11  # CHANGED from 5 to 11
             )
-            self.prediction_head.load_state_dict(torch.load('models/foundation/prediction_head.pth', weights_only=True))
+            self.prediction_head.load_state_dict(torch.load('models/foundation/prediction_head.pth', weights_only=True, map_location='cpu'))
             self.prediction_head.eval()
             self.mode = 'pretrained'
         
