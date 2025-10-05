@@ -6,8 +6,4 @@ services:
     build: .
     ports: 
       - "8000:80" #map 8000 computer port to 80 container port
-    volumes:
-      - weather-data:/data/raw
 
-volumes: 
-  weather-data: 
