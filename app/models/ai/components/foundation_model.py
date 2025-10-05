@@ -91,23 +91,98 @@ class FoundationModel:
         print(f"✓ Foundation Model loaded: {self.config.get('base_model_name', 'Simplified')}")
     
     def predict(self, lat, lon, day_of_year, month, temp, wind, humidity, variable='rain'):
-        """Get prediction from foundation model"""
+        """
+        Get prediction from foundation model using Monte Carlo Dropout
+        
+        Uses 30 stochastic forward passes for epistemic uncertainty quantification
+        Returns mean prediction from MC sampling
+        """
         # Prepare features
         features = np.array([[lat, lon, day_of_year, month, temp, wind, humidity]])
         features = (features - self.mean) / self.std
         features_tensor = torch.tensor(features, dtype=torch.float32)
         
-        # Predict
-        with torch.no_grad():
-            if self.mode == 'simplified':
-                logits = self.model(features_tensor)
-            else:
-                encoded = self.feature_encoder(features_tensor)
-                logits = self.prediction_head(encoded)
-            
-            # Apply sigmoid to convert logits to probabilities
-            predictions = torch.sigmoid(logits)
-        
-        # Extract variable
         var_idx = {'rain': 0, 'hot': 1, 'cold': 2, 'windy': 3, 'temp': 4}.get(variable, 0)
-        return float(predictions[0, var_idx].item())
+        
+        # Monte Carlo Dropout - enable dropout during inference
+        predictions = []
+        n_samples = 30
+        
+        if self.mode == 'simplified':
+            self.model.train()  # Enable dropout
+        else:
+            self.feature_encoder.train()
+            self.prediction_head.train()
+        
+        for _ in range(n_samples):
+            with torch.no_grad():
+                if self.mode == 'simplified':
+                    logits = self.model(features_tensor)
+                else:
+                    encoded = self.feature_encoder(features_tensor)
+                    logits = self.prediction_head(encoded)
+                
+                pred = torch.sigmoid(logits)
+                predictions.append(float(pred[0, var_idx].item()))
+        
+        # Back to eval mode
+        if self.mode == 'simplified':
+            self.model.eval()
+        else:
+            self.feature_encoder.eval()
+            self.prediction_head.eval()
+        
+        # Return mean of MC samples
+        return float(np.mean(predictions))
+
+    def predict_with_uncertainty(self, lat, lon, day_of_year, month, temp, wind, humidity, variable='rain'):
+        """
+        Monte Carlo Dropout with full uncertainty quantification
+        
+        Returns:
+            dict with mean, epistemic_uncertainty, and confidence_interval_95
+        """
+        # Prepare features
+        features = np.array([[lat, lon, day_of_year, month, temp, wind, humidity]])
+        features = (features - self.mean) / self.std
+        features_tensor = torch.tensor(features, dtype=torch.float32)
+        
+        var_idx = {'rain': 0, 'hot': 1, 'cold': 2, 'windy': 3, 'temp': 4}.get(variable, 0)
+        
+        # Monte Carlo sampling
+        predictions = []
+        n_samples = 30
+        
+        if self.mode == 'simplified':
+            self.model.train()
+        else:
+            self.feature_encoder.train()
+            self.prediction_head.train()
+        
+        for _ in range(n_samples):
+            with torch.no_grad():
+                if self.mode == 'simplified':
+                    logits = self.model(features_tensor)
+                else:
+                    encoded = self.feature_encoder(features_tensor)
+                    logits = self.prediction_head(encoded)
+                
+                pred = torch.sigmoid(logits)
+                predictions.append(float(pred[0, var_idx].item()))
+        
+        # Back to eval mode
+        if self.mode == 'simplified':
+            self.model.eval()
+        else:
+            self.feature_encoder.eval()
+            self.prediction_head.eval()
+        
+        return {
+            'mean': float(np.mean(predictions)),
+            'epistemic_uncertainty': float(np.std(predictions)),
+            'confidence_interval_95': (
+                float(np.percentile(predictions, 2.5)),
+                float(np.percentile(predictions, 97.5))
+            ),
+            'n_samples': n_samples
+        }

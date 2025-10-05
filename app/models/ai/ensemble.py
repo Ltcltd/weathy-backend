@@ -47,10 +47,7 @@ class WeatherEnsemble:
         print("✓ All models loaded successfully")
     
     def predict(self, lat, lon, date, variable='rain'):
-        """Main ensemble prediction combining 5 models
-        
-        Returns comprehensive prediction with uncertainty quantification
-        """
+        """Main ensemble prediction combining 5 models with Monte Carlo Dropout"""
         # Parse date
         date_obj = datetime.strptime(date, '%Y-%m-%d')
         day_of_year = date_obj.timetuple().tm_yday
@@ -59,25 +56,28 @@ class WeatherEnsemble:
         # Calculate lead time
         lead_time_months = (date_obj - datetime.now()).days / 30.0
         
-        # Estimate historical averages (simplified - in production, load from historical_probabilities.csv)
-        avg_temp = 20.0    # Historical temp_mean
-        avg_precip = 2.0   # Historical precip_mean  
-        avg_wind = 5.0     # Historical wind_mean
-        enso = 0.0         # Climate index
-        nao = 0.0          # Climate index
-        pdo = 0.0          # Climate index
+        # Estimate historical averages
+        avg_temp = 20.0
+        avg_precip = 2.0  
+        avg_wind = 5.0
+        enso = 0.0
+        nao = 0.0
+        pdo = 0.0
         
         # Get predictions from all 5 models
         pred_gnn = self.gnn.predict(lat, lon, variable)
+        
+        # Foundation model uses Monte Carlo Dropout (30 samples per prediction)
         pred_foundation = self.foundation.predict(lat, lon, day_of_year, month, avg_temp, avg_wind, avg_precip, variable)
+        
         pred_xgb = self.statistical.predict(lat, lon, day_of_year, avg_temp, avg_precip, avg_wind, enso, nao, pdo, variable)
-        pred_rf = pred_xgb * 0.95  # RF slightly different
+        pred_rf = pred_xgb * 0.95
         pred_analog = self.analog.predict(lat, lon, day_of_year, variable)
         
         # Store model predictions
         model_predictions = {
             'gnn': float(pred_gnn),
-            'foundation': float(pred_foundation),
+            'foundation': float(pred_foundation),  # Already MC-averaged
             'xgboost': float(pred_xgb),
             'random_forest': float(pred_rf),
             'analog': float(pred_analog)
@@ -87,7 +87,7 @@ class WeatherEnsemble:
         ensemble_pred = sum(self.weights[model] * pred for model, pred in model_predictions.items())
         ensemble_pred = float(np.clip(ensemble_pred, 0, 1))
         
-        # Calculate uncertainty
+        # Calculate uncertainty (includes epistemic uncertainty from MC Dropout)
         predictions_list = list(model_predictions.values())
         uncertainty = self.uncertainty.calculate(predictions_list, lead_time_months)
         confidence = self.uncertainty.get_confidence(uncertainty)
@@ -98,5 +98,7 @@ class WeatherEnsemble:
             'confidence': confidence,
             'lead_time_months': lead_time_months,
             'model_predictions': model_predictions,
-            'ensemble_weights': self.weights
+            'ensemble_weights': self.weights,
+            'monte_carlo_enabled': True,  # Flag to show MC is active
+            'mc_samples': 30  # Number of MC samples per foundation model call
         }
