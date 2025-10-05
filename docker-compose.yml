@@ -10,22 +10,8 @@ services:
     build: .
     ports: 
       - "8000:80" #map 8000 computer port to 80 container port
-    environment:
-      #allows this container to access weathy database in the "db" container
-      - DATABASE_URL=mongodb://db:27017/weathyDB
-    depends_on:
-      - db 
-
-
-  db:
-    image: mongo:latest 
-    # ports:
-    #   - somehting somehting
     volumes:
-      #mongo-data = ssd thingy created
-      #/data/db is physical organization - don't worry about it
-     - mongo-data:/data/db
+      - weather-data:/code/data 
 
-#mongo-data is a "storage space", like an ssd. NOT controlled by any container.
 volumes: 
-  mongo-data: 
+  weather-data 
