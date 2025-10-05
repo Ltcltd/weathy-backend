@@ -2,6 +2,7 @@ from app.models.ai.ensemble import WeatherEnsemble
 from datetime import datetime, timedelta
 import sys
 
+# DEPRECATED
 
 def test_ensemble():
     """Test the complete ensemble system"""
