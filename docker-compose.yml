@@ -1,9 +1,5 @@
 version: '3.8'
 
-#APP & DB are two different containers
-#They are automatically connected to each other by docker on the docker network
-#app container doesn't need a port to communicate here
-
 services:
   #service for fastAPI
   app:
@@ -11,7 +7,7 @@ services:
     ports: 
       - "8000:80" #map 8000 computer port to 80 container port
     volumes:
-      - weather-data:/code/data 
+      - weather-data:/data/raw
 
 volumes: 
-  weather-data 
+  weather-data: 
