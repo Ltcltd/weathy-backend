@@ -4,10 +4,10 @@ import sys
 
 def train_all_models():
     scripts = [
-        ("scripts/training/train_gnn.py", "GNN (Graph Neural Network)"),
-        ("scripts/training/train_statistical.py", "Statistical Models (XGBoost + RF)"),
-        ("scripts/training/train_foundation_model.py", "Foundation Model (Pre-trained + Fine-tuned)"),
-        ("scripts/training/optimize_ensemble.py", "Quantum Ensemble Optimization"),
+        ("/code/scripts/training/train_gnn.py", "GNN (Graph Neural Network)"),
+        ("/code/scripts/training/train_statistical.py", "Statistical Models (XGBoost + RF)"),
+        ("/code/scripts/training/train_foundation_model.py", "Foundation Model (Pre-trained + Fine-tuned)"),
+        ("/code/scripts/training/optimize_ensemble.py", "Quantum Ensemble Optimization"),
     ]
     
     print("="*80)

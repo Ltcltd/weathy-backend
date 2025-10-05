@@ -5,10 +5,10 @@ from pathlib import Path
 
 def run_preprocessing():
     scripts = [
-        ("scripts/preprocessing/prepare_training_data.py", "Preparing training data"),
-        ("scripts/preprocessing/build_teleconnection_graph.py", "Building GNN graph"),
-        ("scripts/preprocessing/build_global_grids.py", "Building probability grids"),
-        ("scripts/preprocessing/integrate_sources.py", "Integrating data sources"),
+        ("/code/scripts/preprocessing/prepare_training_data.py", "Preparing training data"),
+        ("/code/scripts/preprocessing/build_teleconnection_graph.py", "Building GNN graph"),
+        ("/code/scripts/preprocessing/build_global_grids.py", "Building probability grids"),
+        ("/code/scripts/preprocessing/integrate_sources.py", "Integrating data sources"),
     ]
     
     print("="*80)
