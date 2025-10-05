@@ -46,7 +46,7 @@ class GNNTeleconnections:
     
     def __init__(self):
         self.model = GNNModel(output=11)  # 11 outputs
-        self.model.load_state_dict(torch.load('models/gnn/gnn_model.pth', weights_only=True))
+        self.model.load_state_dict(torch.load('models/gnn/gnn_model.pth', weights_only=True, map_location='cpu'))
         self.model.eval()
         
         with open('data/processed/graphs/climate_graph.pkl', 'rb') as f:
