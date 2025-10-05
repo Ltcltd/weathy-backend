@@ -63,7 +63,7 @@ def download_single_location(args):
 def download_nasa_power_comprehensive():
     lats = list(range(-80, 85, 10))
     lons = list(range(-175, 180, 10))
-    years = [2020, 2021, 2022, 2023, 2024]
+    years = [2022, 2023, 2024]
     
     tasks = [(lat, lon, year) for lat in lats for lon in lons for year in years]
     
