@@ -12,8 +12,8 @@ def build_teleconnection_graph():
     region_map = {}
     idx = 0
     
-    for lat in range(-90, 100, 10):  # Every 10°
-        for lon in range(-180, 181, 60):  # Every 60°
+    for lat in range(-90, 100, 10):  # Every 10 degrees
+        for lon in range(-180, 181, 60):  # Every 60 degrees
             regions.append({'lat': lat, 'lon': lon, 'idx': idx})
             region_map[(lat, lon)] = idx
             idx += 1
@@ -57,8 +57,8 @@ def build_teleconnection_graph():
     # [avg_temp, avg_precip, avg_wind, enso, nao, pdo, lat_norm, lon_norm, season_sin, season_cos]
     x = torch.randn(num_regions, 10) * 0.1
     
-    # Targets (5 weather event types)
-    y = torch.zeros(num_regions, 5)
+    # Targets (11 weather event types) - FIXED from 5 to 11
+    y = torch.zeros(num_regions, 11)
     
     graph = Data(x=x, edge_index=edge_index, y=y)
     
@@ -75,8 +75,8 @@ def build_teleconnection_graph():
     with open(output_dir / "climate_graph.pkl", 'wb') as f:
         pickle.dump(graph_data, f)
     
-    print(f"✓ Graph: {num_regions} nodes, {len(edges)} edges")
-    print(f"✓ Teleconnections: ENSO, NAO, IOD included")
+    print(f"Graph: {num_regions} nodes, {len(edges)} edges")
+    print(f"Teleconnections: ENSO, NAO, IOD included")
     
     return graph
 

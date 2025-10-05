@@ -8,31 +8,52 @@ class StatisticalModels:
         with open('models/statistical/feature_names.pkl', 'rb') as f:
             self.feature_names = pickle.load(f)
     
-    def predict(self, lat, lon, day_of_year, hist_temp, hist_precip, hist_wind, enso=0, nao=0, pdo=0, variable='rain'):
-        """Predict using statistical models with HISTORICAL features
-        
-        Parameters match training data structure:
-        - lat, lon, day_of_year: location and time
-        - hist_temp, hist_precip, hist_wind: historical averages
-        - enso, nao, pdo: climate indices
-        - variable: 'rain', 'hot', 'cold', 'windy', 'temp'
+    def predict(self, lat, lon, day_of_year, hist_temp, hist_precip, hist_wind, 
+                hist_humidity=50, hist_cloud=50, enso=0, nao=0, pdo=0, variable='rain'):
         """
-        # Build feature vector matching training EXACTLY
-        # Order: [lat, lon, day_of_year, temp_mean, precip_mean, wind_mean, enso, nao, pdo]
+        Predict using statistical models - SUPPORTS ALL 11 VARIABLES
+        
+        Args:
+            lat, lon: Location
+            day_of_year: Day of year (1-366)
+            hist_temp, hist_precip, hist_wind: Historical averages
+            hist_humidity, hist_cloud: Optional historical averages
+            enso, nao, pdo: Climate indices
+            variable: One of 11 weather variables
+        
+        Returns:
+            Float probability [0, 1]
+        """
+        # Build feature vector matching training
+        # Features: lat, lon, day_of_year, temp, precip, wind, humidity, cloud, enso, nao, pdo
         features = np.array([[
             lat, lon, day_of_year,
-            hist_temp,    # temp_mean
-            hist_precip,  # precip_mean
-            hist_wind,    # wind_mean
-            enso, nao, pdo  # climate indices
+            hist_temp,
+            hist_precip,
+            hist_wind,
+            hist_humidity,
+            hist_cloud,
+            enso, nao, pdo
         ]])
         
+        # Check if variable has trained models
+        if variable not in self.models:
+            # Fallback to rain if variable not found
+            if 'rain' in self.models:
+                variable = 'rain'
+            else:
+                return 0.1  # Default fallback
+        
         # Get models for this variable
-        var_models = self.models.get(variable, self.models['rain'])
+        model_dict = self.models[variable]
+        rf = model_dict['rf']
+        xgb = model_dict['xgb']
         
-        # Average RF and XGBoost predictions
-        rf_pred = var_models['rf'].predict(features)[0]
-        xgb_pred = var_models['xgb'].predict(features)[0]
-        avg_pred = (rf_pred + xgb_pred) / 2.0
+        # Predict
+        pred_rf = rf.predict(features)[0]
+        pred_xgb = xgb.predict(features)[0]
         
-        return float(np.clip(avg_pred, 0, 1))
+        # Ensemble average
+        pred = (pred_rf + pred_xgb) / 2.0
+        
+        return float(np.clip(pred, 0, 1))
