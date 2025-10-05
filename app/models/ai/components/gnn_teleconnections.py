@@ -5,7 +5,7 @@ import pickle
 import numpy as np
 
 class GNNModel(torch.nn.Module):
-    def __init__(self, num_features=10, hidden=128, output=5):
+    def __init__(self, num_features=10, hidden=128, output=11):
         super().__init__()
         self.conv1 = GCNConv(num_features, hidden)
         self.conv2 = GCNConv(hidden, hidden)
@@ -29,35 +29,52 @@ class GNNModel(torch.nn.Module):
         return torch.sigmoid(x)
 
 class GNNTeleconnections:
+    # Map API variable names to output indices
+    VARIABLE_INDEX = {
+        'rain': 0,
+        'heavy_rain': 1,
+        'snow': 2,
+        'cloud_cover': 3,
+        'wind_speed_high': 4,
+        'temperature_hot': 5,
+        'temperature_cold': 6,
+        'heat_wave': 7,
+        'cold_snap': 8,
+        'dust_event': 9,
+        'uncomfortable_index': 10
+    }
+    
     def __init__(self):
-        self.model = GNNModel()
+        self.model = GNNModel(output=11)  # 11 outputs
         self.model.load_state_dict(torch.load('models/gnn/gnn_model.pth', weights_only=True))
         self.model.eval()
         
         with open('data/processed/graphs/climate_graph.pkl', 'rb') as f:
-            data = pickle.load(f)
-            self.graph = data['graph']
-            self.regions = data['regions']
-            self.region_map = data['region_map']
+            self.graph_data = pickle.load(f)
     
     def predict(self, lat, lon, variable='rain'):
-        """Predict using GNN"""
-        region_idx = self._find_nearest_region(lat, lon)
+        """
+        Predict weather probability using teleconnections
+        
+        Args:
+            lat: Latitude
+            lon: Longitude
+            variable: One of 11 weather variables
+        
+        Returns:
+            Float probability [0, 1]
+        """
+        # Find nearest node in graph
+        regions = self.graph_data['regions']
+        distances = [(i, (r['lat'] - lat)**2 + (r['lon'] - lon)**2) for i, r in enumerate(regions)]
+        nearest_idx = min(distances, key=lambda x: x[1])[0]
+        
+        # Run inference
+        graph = self.graph_data['graph']
         with torch.no_grad():
-            out = self.model(self.graph.x, self.graph.edge_index)
+            predictions = self.model(graph.x, graph.edge_index)
         
-        var_idx = {'rain': 0, 'hot': 1, 'cold': 2, 'windy': 3, 'temp': 4}.get(variable, 0)
-        return float(out[region_idx, var_idx].item())
-    
-    def _find_nearest_region(self, lat, lon):
-        """Find nearest region node"""
-        min_dist = float('inf')
-        nearest_idx = 0
+        # Get correct output index for requested variable
+        var_idx = self.VARIABLE_INDEX.get(variable, 0)
         
-        for region in self.regions:
-            dist = ((region['lat'] - lat)**2 + (region['lon'] - lon)**2)**0.5
-            if dist < min_dist:
-                min_dist = dist
-                nearest_idx = region['idx']
-        
-        return nearest_idx
+        return float(predictions[nearest_idx, var_idx].item())

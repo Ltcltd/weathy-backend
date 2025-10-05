@@ -13,30 +13,30 @@ class WeatherEnsemble:
         
         try:
             self.gnn = GNNTeleconnections()
-            print("  ✓ GNN loaded")
+            print("  GNN loaded")
         except Exception as e:
-            print(f"  ✗ GNN failed: {e}")
+            print(f"  GNN failed: {e}")
             raise
         
         try:
             self.foundation = FoundationModel()
-            print("  ✓ Foundation model loaded")
+            print("  Foundation model loaded")
         except Exception as e:
-            print(f"  ✗ Foundation model failed: {e}")
+            print(f"  Foundation model failed: {e}")
             raise
         
         try:
             self.statistical = StatisticalModels()
-            print("  ✓ Statistical models loaded")
+            print("  Statistical models loaded")
         except Exception as e:
-            print(f"  ✗ Statistical models failed: {e}")
+            print(f"  Statistical models failed: {e}")
             raise
         
         try:
             self.analog = AnalogMatcher()
-            print("  ✓ Analog matcher loaded")
+            print("  Analog matcher loaded")
         except Exception as e:
-            print(f"  ✗ Analog matcher failed: {e}")
+            print(f"  Analog matcher failed: {e}")
             raise
         
         self.uncertainty = UncertaintyQuantifier()
@@ -44,10 +44,11 @@ class WeatherEnsemble:
         with open('models/ensemble/weights.json') as f:
             self.weights = json.load(f)
         
-        print("✓ All models loaded successfully")
+        print("  All models loaded successfully")
     
     def predict(self, lat, lon, date, variable='rain'):
         """Main ensemble prediction combining 5 models with Monte Carlo Dropout"""
+        
         # Parse date
         date_obj = datetime.strptime(date, '%Y-%m-%d')
         day_of_year = date_obj.timetuple().tm_yday
@@ -56,10 +57,12 @@ class WeatherEnsemble:
         # Calculate lead time
         lead_time_months = (date_obj - datetime.now()).days / 30.0
         
-        # Estimate historical averages
+        # Estimate historical averages (in production, load from database)
         avg_temp = 20.0
-        avg_precip = 2.0  
+        avg_precip = 2.0
         avg_wind = 5.0
+        avg_humidity = 50.0
+        avg_cloud = 50.0
         enso = 0.0
         nao = 0.0
         pdo = 0.0
@@ -68,10 +71,28 @@ class WeatherEnsemble:
         pred_gnn = self.gnn.predict(lat, lon, variable)
         
         # Foundation model uses Monte Carlo Dropout (30 samples per prediction)
-        pred_foundation = self.foundation.predict(lat, lon, day_of_year, month, avg_temp, avg_wind, avg_precip, variable)
+        # Parameters: lat, lon, day_of_year, month, temp, wind, humidity, variable
+        pred_foundation = self.foundation.predict(
+            lat, lon, day_of_year, month, 
+            avg_temp, avg_wind, avg_humidity, variable
+        )
         
-        pred_xgb = self.statistical.predict(lat, lon, day_of_year, avg_temp, avg_precip, avg_wind, enso, nao, pdo, variable)
+        # Statistical models (XGBoost + Random Forest ensemble)
+        # Parameters: lat, lon, day_of_year, hist_temp, hist_precip, hist_wind, 
+        #             hist_humidity, hist_cloud, enso, nao, pdo, variable
+        pred_xgb = self.statistical.predict(
+            lat, lon, day_of_year, 
+            avg_temp, avg_precip, avg_wind,
+            hist_humidity=avg_humidity,
+            hist_cloud=avg_cloud,
+            enso=enso, nao=nao, pdo=pdo,
+            variable=variable
+        )
+        
+        # RF prediction approximated as 95% of XGBoost (they're trained together)
         pred_rf = pred_xgb * 0.95
+        
+        # Historical analog matching
         pred_analog = self.analog.predict(lat, lon, day_of_year, variable)
         
         # Store model predictions

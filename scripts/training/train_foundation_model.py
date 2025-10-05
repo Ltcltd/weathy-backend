@@ -7,12 +7,13 @@ import numpy as np
 from sklearn.model_selection import train_test_split
 import json
 
+
 class WeatherPredictionHead(nn.Module):
     """
     Small prediction head for weather probabilities
     This is the ONLY part we train (base model is frozen)
     """
-    def __init__(self, input_dim, num_outputs=5):
+    def __init__(self, input_dim, num_outputs=11):
         super().__init__()
         self.head = nn.Sequential(
             nn.Linear(input_dim, 256),
@@ -28,6 +29,7 @@ class WeatherPredictionHead(nn.Module):
     
     def forward(self, x):
         return self.head(x)
+
 
 class FeatureEncoder(nn.Module):
     """
@@ -45,6 +47,7 @@ class FeatureEncoder(nn.Module):
     
     def forward(self, x):
         return self.encoder(x)
+
 
 def download_pretrained_foundation():
     """
@@ -95,18 +98,19 @@ def download_pretrained_foundation():
             else:
                 hidden_dim = model_info['dim']
             
-            print(f"  ✓ Downloaded successfully!")
-            print(f"  ✓ Hidden dimension: {hidden_dim}\n")
+            print(f"  Downloaded successfully!")
+            print(f"  Hidden dimension: {hidden_dim}\n")
             
             return model, hidden_dim, model_info
             
         except Exception as e:
-            print(f"  ✗ Failed: {str(e)[:100]}\n")
+            print(f"  Failed: {str(e)[:100]}\n")
             continue
     
-    print("⚠ Could not download pre-trained models")
+    print("Could not download pre-trained models")
     print("  Using simplified architecture\n")
     return None, None, None
+
 
 def train_foundation_model():
     """
@@ -129,19 +133,19 @@ def train_foundation_model():
     print("\nFreezing base model parameters...")
     for param in pretrained_model.parameters():
         param.requires_grad = False
-    print("✓ Base model frozen (will NOT be trained)")
+    print("Base model frozen (will NOT be trained)")
     
     # Create trainable components
     feature_encoder = FeatureEncoder(input_dim=7, output_dim=hidden_dim)
-    prediction_head = WeatherPredictionHead(input_dim=hidden_dim, num_outputs=5)
+    prediction_head = WeatherPredictionHead(input_dim=hidden_dim, num_outputs=11)
     
     print(f"\nTrainable components:")
-    print(f"  • Feature encoder: 7 → {hidden_dim}")
-    print(f"  • Prediction head: {hidden_dim} → 5 probabilities")
+    print(f"  Feature encoder: 7 → {hidden_dim}")
+    print(f"  Prediction head: {hidden_dim} → 11 probabilities")
     
     total_params = sum(p.numel() for p in feature_encoder.parameters()) + \
                    sum(p.numel() for p in prediction_head.parameters())
-    print(f"  • Trainable parameters: {total_params:,}")
+    print(f"  Trainable parameters: {total_params:,}")
     
     # Load training data
     print("\nLoading training data...")
@@ -161,17 +165,23 @@ def train_foundation_model():
     X_std = X.std(axis=0) + 1e-8
     X = (X - X_mean) / X_std
      
-    # Targets - binary labels
-    y_binary = df[['rain_occurred', 'hot_day', 'cold_day', 'windy_day']].fillna(0).values
-    y_binary = np.clip(y_binary, 0.0, 1.0)  # Ensure [0,1] range
+    # Targets - probability labels for weather conditions
+    target_cols = [
+        'rain', 'heavy_rain', 'snow', 'cloud_cover_high',
+        'wind_speed_high', 'temperature_hot', 'temperature_cold',
+        'heat_wave', 'cold_snap', 'dust_event', 'uncomfortable_index'
+    ]
     
-    # Temperature - proper normalization
-    temp_values = df['temp'].fillna(20).values
-    temp_min, temp_max = temp_values.min(), temp_values.max()
-    temp_normalized = (temp_values - temp_min) / (temp_max - temp_min + 1e-8)
+    # Check which columns exist in the dataset
+    available_cols = [col for col in target_cols if col in df.columns]
+    missing_cols = [col for col in target_cols if col not in df.columns]
     
-    y = np.column_stack([y_binary, temp_normalized])
-
+    if missing_cols:
+        print(f"  Warning: Missing columns: {missing_cols}")
+    print(f"  Using {len(available_cols)} target variables")
+    
+    y = df[available_cols].fillna(0).values
+    y = np.clip(y, 0.0, 1.0)  # Ensure [0,1] range
     
     # Split
     X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42)
@@ -183,13 +193,11 @@ def train_foundation_model():
     y_val = torch.tensor(y_val, dtype=torch.float32)
     
     print(f"  Training: {len(X_train):,} | Validation: {len(X_val):,}")
+    print(f"  Target shape: {y_train.shape}")
 
     # Validate target ranges
     print(f"  Target value range - Train: [{y_train.min():.3f}, {y_train.max():.3f}]")
     print(f"  Target value range - Val: [{y_val.min():.3f}, {y_val.max():.3f}]")
-    assert torch.all((y_train >= 0) & (y_train <= 1)), f"Invalid y_train values detected"
-    assert torch.all((y_val >= 0) & (y_val <= 1)), f"Invalid y_val values detected"
-
     
     # Setup training
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -210,7 +218,6 @@ def train_foundation_model():
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=5, factor=0.5)
     criterion = nn.BCEWithLogitsLoss()
 
-    
     print("\nTraining prediction head (50 epochs)...")
     print("="*80)
     
@@ -326,7 +333,8 @@ def train_foundation_model():
         'base_model_name': model_info['name'],
         'hidden_dim': hidden_dim,
         'input_dim': 7,
-        'output_dim': 5,
+        'output_dim': 11,
+        'target_columns': available_cols,
         'normalization_mean': X_mean.tolist(),
         'normalization_std': X_std.tolist(),
         'best_val_loss': float(best_val_loss),
@@ -337,13 +345,14 @@ def train_foundation_model():
         json.dump(config, f, indent=2)
     
     print("\n" + "="*80)
-    print("✓ FOUNDATION MODEL FINE-TUNED")
+    print("FOUNDATION MODEL FINE-TUNED")
     print("="*80)
     print(f"  Base model: {model_info['name']} (frozen)")
     print(f"  Fine-tuned head: {total_params:,} parameters")
     print(f"  Best validation loss: {best_val_loss:.4f}")
     print(f"  Saved to: {output_dir}")
     print("\n  This model will be combined with GNN, XGBoost, RF, Analog in ensemble!")
+
 
 def train_simplified_foundation():
     """
@@ -366,11 +375,11 @@ def train_simplified_foundation():
                 nn.LayerNorm(256),
                 nn.ReLU(),
                 nn.Dropout(0.2),
-                nn.Linear(256, 5)
+                nn.Linear(256, 11)
             )
         
         def forward(self, x):
-            return self.model(x)
+            return torch.sigmoid(self.model(x))
     
     model = SimplifiedModel()
     
@@ -382,12 +391,15 @@ def train_simplified_foundation():
     X_std = X.std(axis=0) + 1e-8
     X = (X - X_mean) / X_std
     
-    y_binary = df[['rain_occurred', 'hot_day', 'cold_day', 'windy_day']].fillna(0).values
-    y_binary = np.clip(y_binary, 0.0, 1.0)
-    temp_values = df['temp'].fillna(20).values
-    temp_normalized = (temp_values - temp_values.min()) / (temp_values.max() - temp_values.min() + 1e-8)
-    y = np.column_stack([y_binary, temp_normalized])
-
+    target_cols = [
+        'rain', 'heavy_rain', 'snow', 'cloud_cover_high',
+        'wind_speed_high', 'temperature_hot', 'temperature_cold',
+        'heat_wave', 'cold_snap', 'dust_event', 'uncomfortable_index'
+    ]
+    available_cols = [col for col in target_cols if col in df.columns]
+    
+    y = df[available_cols].fillna(0).values
+    y = np.clip(y, 0.0, 1.0)
     
     X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42)
     
@@ -397,8 +409,7 @@ def train_simplified_foundation():
     y_val = torch.tensor(y_val, dtype=torch.float32)
     
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
-    criterion = nn.BCEWithLogitsLoss()
-
+    criterion = nn.BCELoss()
     
     print("\nTraining simplified model (30 epochs)...")
     
@@ -427,21 +438,24 @@ def train_simplified_foundation():
     output_dir = Path("models/foundation")
     output_dir.mkdir(parents=True, exist_ok=True)
     
-    torch.save(model.state_dict(), output_dir / "simplified_foundation.pth")
+    torch.save(model.state_dict(), output_dir / "foundation_model.pth")
     
     config = {
         'model_type': 'simplified',
         'base_model': 'Neural Network',
         'hidden_dim': 512,
+        'output_dim': 11,
+        'target_columns': available_cols,
         'normalization_mean': X_mean.tolist(),
         'normalization_std': X_std.tolist(),
         'best_val_loss': float(best_loss)
     }
     
-    with open(output_dir / "config.json", 'w') as f:
+    with open(output_dir / "normalization.json", 'w') as f:
         json.dump(config, f, indent=2)
     
-    print("\n✓ Simplified foundation model trained")
+    print("\nSimplified foundation model trained")
+
 
 if __name__ == "__main__":
     train_foundation_model()

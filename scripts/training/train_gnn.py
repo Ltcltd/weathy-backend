@@ -7,15 +7,15 @@ import pandas as pd
 import numpy as np
 
 class GNNModel(torch.nn.Module):
-    def __init__(self, num_features=10, hidden=128, output=5):
+    def __init__(self, num_features=10, hidden=128, output=11):
         super().__init__()
         self.conv1 = GCNConv(num_features, hidden)
         self.conv2 = GCNConv(hidden, hidden)
         self.conv3 = GCNConv(hidden, output)
-        self.dropout = torch.nn.Dropout(0.5)  # Increased dropout
+        self.dropout = torch.nn.Dropout(0.5)
         self.batch_norm1 = torch.nn.BatchNorm1d(hidden)
         self.batch_norm2 = torch.nn.BatchNorm1d(hidden)
-        
+    
     def forward(self, x, edge_index):
         x = self.conv1(x, edge_index)
         x = self.batch_norm1(x)
@@ -31,9 +31,9 @@ class GNNModel(torch.nn.Module):
         return torch.sigmoid(x)
 
 def train_gnn():
-    print("="*80)
-    print("TRAINING GRAPH NEURAL NETWORK (FIXED)")
-    print("="*80)
+    print("=" * 80)
+    print("TRAINING GRAPH NEURAL NETWORK - 11 OUTPUT VARIABLES")
+    print("=" * 80)
     
     # Load graph
     with open("data/processed/graphs/climate_graph.pkl", 'rb') as f:
@@ -59,15 +59,38 @@ def train_gnn():
     
     print("\nPreparing node features and targets...")
     
+    # Define target column names
+    target_columns = [
+        'rain_mean',
+        'heavy_rain_mean',
+        'snow_mean',
+        'cloud_cover_high_mean',
+        'wind_speed_high_mean',
+        'temperature_hot_mean',
+        'temperature_cold_mean',
+        'heat_wave_mean',
+        'cold_snap_mean',
+        'dust_event_mean',
+        'uncomfortable_index_mean'
+    ]
+    
+    # Check which targets exist
+    available_targets = [col for col in target_columns if col in df.columns]
+    missing_targets = [col for col in target_columns if col not in df.columns]
+    
+    if missing_targets:
+        print(f"\nWarning: Missing target columns: {missing_targets}")
+    print(f"Using {len(available_targets)} target variables")
+    
     # Fill graph with actual data
     for idx, region in enumerate(regions):
         region_data = df[(df['lat'] == region['lat']) & (df['lon'] == region['lon'])]
         
         if len(region_data) > 0:
-            # Features: ONLY historical averages and climate info
-            avg_temp = region_data['temp_mean'].mean()
-            avg_precip = region_data['precip_mean'].mean()
-            avg_wind = region_data['wind_mean'].mean()
+            # Features: historical averages and climate info
+            avg_temp = region_data['temp_mean'].mean() if 'temp_mean' in df.columns else 20.0
+            avg_precip = region_data['precip_mean'].mean() if 'precip_mean' in df.columns else 2.0
+            avg_wind = region_data['wind_mean'].mean() if 'wind_mean' in df.columns else 5.0
             
             # Normalize features to [0, 1] range
             graph.x[idx, 0] = np.clip(avg_temp / 50.0, 0, 1)
@@ -81,19 +104,21 @@ def train_gnn():
             graph.x[idx, 6] = (region['lat'] + 90) / 180  # Normalize to [0,1]
             graph.x[idx, 7] = (region['lon'] + 180) / 360
             
-            # Targets: probability of each event type
-            graph.y[idx, 0] = np.clip(region_data['rain_occurred_mean'].mean(), 0, 1)
-            graph.y[idx, 1] = np.clip(region_data['hot_day_mean'].mean(), 0, 1)
-            graph.y[idx, 2] = np.clip(region_data['cold_day_mean'].mean(), 0, 1)
-            graph.y[idx, 3] = np.clip(region_data['windy_day_mean'].mean(), 0, 1)
-            graph.y[idx, 4] = np.clip(region_data['temp_mean'].mean() / 50.0, 0, 1)
+            # Set all 11 targets (probability of each event type)
+            for target_idx, col_name in enumerate(target_columns):
+                if col_name in df.columns:
+                    value = region_data[col_name].mean()
+                    graph.y[idx, target_idx] = np.clip(value, 0, 1)
+                else:
+                    # Fallback for missing columns
+                    graph.y[idx, target_idx] = 0.1
     
-    # Initialize model
-    model = GNNModel(num_features=10, hidden=128, output=5)
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay=1e-3)  # Added weight decay
+    # Initialize model with 11 outputs
+    model = GNNModel(num_features=10, hidden=128, output=11)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay=1e-3)
     
     print("\nTraining GNN for 200 epochs with regularization...")
-    print("-"*80)
+    print("-" * 80)
     
     model.train()
     best_loss = float('inf')
@@ -149,17 +174,22 @@ def train_gnn():
     torch.save({
         'num_features': 10,
         'hidden': 128,
-        'output': 5,
+        'output': 11,
         'final_loss': loss.item(),
-        'best_loss': best_loss
+        'best_loss': best_loss,
+        'target_columns': target_columns
     }, output_dir / "gnn_config.pth")
     
-    print("\n" + "="*80)
-    print("✓ GNN MODEL TRAINED (WITH REGULARIZATION)")
-    print("="*80)
+    print("\n" + "=" * 80)
+    print("GNN MODEL TRAINED - 11 OUTPUT VARIABLES")
+    print("=" * 80)
     print(f"  Best Loss: {best_loss:.4f}")
+    print(f"  Output variables: {len(target_columns)}")
     print(f"  Model saved: models/gnn/gnn_model.pth")
-    print(f"\n  Loss > 0 is GOOD - means model generalizes!")
+    print(f"\n  Target variables:")
+    for i, col in enumerate(target_columns, 1):
+        print(f"    {i:2d}. {col}")
+    print("=" * 80)
 
 if __name__ == "__main__":
     train_gnn()
