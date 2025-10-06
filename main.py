@@ -5,10 +5,23 @@ from app.core.config import settings
 from app.core.logging import setup_logging
 from app.api.routes import probability, dashboard, map_endpoints, custom_query, historical, map_layers, chatbot, utility
 import logging
+import os
+from contextlib import asynccontextmanager
 
 # Initialize logging
 setup_logging()
 logger = logging.getLogger(__name__)
+
+# Lifespan event handler
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    logger.info("Starting Weather Probability API...")
+    logger.info(f"Model path: {settings.MODEL_BASE_PATH}")
+    logger.info(f"Data path: {settings.DATA_BASE_PATH}")
+    yield
+    # Shutdown
+    logger.info("Shutting down Weather Probability API...")
 
 # Create FastAPI app
 app = FastAPI(
@@ -16,7 +29,8 @@ app = FastAPI(
     description="AI-powered subseasonal-to-seasonal weather probability predictions",
     version="1.0.0",
     docs_url="/docs",
-    redoc_url="/redoc"
+    redoc_url="/redoc",
+    lifespan=lifespan
 )
 
 # CORS middleware
@@ -27,19 +41,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-# Startup event
-@app.on_event("startup")
-async def startup_event():
-    logger.info("Starting Weather Probability API...")
-    logger.info(f"Model path: {settings.MODEL_BASE_PATH}")
-    logger.info(f"Data path: {settings.DATA_BASE_PATH}")
-
-# Shutdown event
-@app.on_event("shutdown")
-async def shutdown_event():
-    logger.info("Shutting down Weather Probability API...")
 
 # Health check endpoint
 @app.get("/health")
@@ -88,10 +89,12 @@ async def global_exception_handler(request, exc):
 
 if __name__ == "__main__":
     import uvicorn
+    # Use environment variable PORT, default to 8000 for local development
+    port = int(os.getenv("PORT", 8000))
     uvicorn.run(
         "main:app",
         host="0.0.0.0",
-        port=8000,
+        port=port,
         reload=True,
         log_level="info"
     )
