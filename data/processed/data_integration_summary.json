@@ -1,0 +1,64 @@
+{
+  "data_sources": {
+    "NASA_POWER": {
+      "records": 578862,
+      "variables": [
+        "T2M",
+        "PRECTOTCORR",
+        "WS2M",
+        "RH2M"
+      ],
+      "coverage": "Global point data",
+      "role": "Primary training data"
+    },
+    "MERRA2": {
+      "files": 3,
+      "variables": [
+        "T2M",
+        "PRECTOT",
+        "U10M",
+        "V10M"
+      ],
+      "coverage": "Global reanalysis grid",
+      "role": "Validation and context"
+    },
+    "ERA5": {
+      "files": 3,
+      "variables": [
+        "t2m",
+        "tp",
+        "u10",
+        "v10"
+      ],
+      "coverage": "High-resolution reanalysis",
+      "role": "Enhanced accuracy"
+    },
+    "Giovanni": {
+      "files": 12,
+      "regions": [
+        "North_America",
+        "Europe",
+        "Asia",
+        "Australia"
+      ],
+      "coverage": "Regional precipitation",
+      "role": "High-resolution precipitation"
+    },
+    "Satellite": {
+      "sources": [
+        "GOES-16",
+        "MODIS",
+        "GPM"
+      ],
+      "coverage": "Real-time imagery",
+      "role": "Multi-modal architecture support"
+    }
+  },
+  "integration_approach": "Hierarchical ensemble with weighted contributions",
+  "novel_features": [
+    "GNN modeling of teleconnections",
+    "Quantum-inspired ensemble optimization",
+    "Multi-source fusion architecture",
+    "Adaptive uncertainty quantification"
+  ]
+}

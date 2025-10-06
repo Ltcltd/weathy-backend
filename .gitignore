@@ -1,6 +1,13 @@
 notes.txt
-/data/
-__pycache__
-models/**/*.pth
-models/**/*.pkl
-.gitignore
+**/__pycache__/
+
+
+# Ignore everything in /data except /data/processed
+/data/*
+!/data/processed/
+!/data/processed/**
+
+# Ignore nothing in models/
+!models/
+
+.env
